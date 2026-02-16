@@ -1,0 +1,112 @@
+version: "3.8"
+
+services:
+  # --- INFRASTRUCTURE LAYER (The Foundation) ---
+
+  # 1. Postgres (The Database)
+  postgres:
+    image: postgres:15-alpine
+    container_name: ent-postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: microservices_db
+    ports:
+      - "5432:5432"
+    networks:
+      - backend-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis (The Cache)
+  redis:
+    image: redis:7-alpine
+    container_name: ent-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - backend-network
+
+  # 3. Zookeeper (Kafka Manager)
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: ent-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - backend-network
+
+  # 4. Kafka (Message Broker)
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: ent-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    networks:
+      - backend-network
+
+  # --- APPLICATION LAYER (Your Code) ---
+
+  # 5. Go API Gateway (The Front Door)
+  api-gateway:
+    image: my-go-gateway # Uses the image we built
+    container_name: ent-gateway
+    build: ./api-gateway-go # Builds from your folder if image is missing
+    ports:
+      - "8080:8080" # User hits localhost:8080
+    environment:
+      - PYTHON_SERVICE_URL=http://ingestion-service:8000
+    depends_on:
+      - ingestion-service
+    networks:
+      - backend-network
+
+  # 6. Python Service (The Fast Writer)
+  ingestion-service:
+    image: my-python-service # Uses the image we built
+    container_name: ent-ingestion
+    build: ./ingestion-service-py # Builds from your folder if image is missing
+    expose:
+      - "8000" # Internal port only (Gateway talks to this)
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    depends_on:
+      - redis
+    networks:
+      - backend-network
+
+  # 7. Java Service (The Heavy Lifter)
+  processing-service:
+    image: my-java-service # Uses the image we built
+    container_name: ent-processing
+    build: ./processing-service-java # Builds from your folder if image is missing
+    ports:
+      - "8081:8081"
+    environment:
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://postgres:5432/microservices_db
+      - SPRING_DATASOURCE_USERNAME=admin
+      - SPRING_DATASOURCE_PASSWORD=password
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:29092
+    depends_on:
+      - postgres
+      - kafka
+    networks:
+      - backend-network
+
+networks:
+  backend-network:
+    driver: bridge

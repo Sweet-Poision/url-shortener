@@ -1,0 +1,29 @@
+# General
+.DS_Store
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.pytest_cache/
+
+# Java
+target/
+*.class
+*.jar
+*.war
+.mvn/
+.classpath
+.project
+.settings/
+
+# Node/Next.js
+node_modules/
+.next/
+out/
+build/
+
+# Docker
+.docker/
