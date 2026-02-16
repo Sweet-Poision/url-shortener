@@ -4,3 +4,4 @@ gunicorn==21.2.0
 redis==5.0.1
 pydantic==2.6.0
 python-dotenv==1.0.1
+confluent-kafka==2.3.0

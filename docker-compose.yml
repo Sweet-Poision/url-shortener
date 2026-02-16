@@ -84,6 +84,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - KAFKA_HOST=kafka:29092
     depends_on:
       - redis
     networks:
